@@ -1,6 +1,9 @@
 #include <libutils/misc.h>
 #include <libutils/timer.h>
 #include <libutils/fast_random.h>
+#include <libgpu/context.h>
+#include <libgpu/shared_device_buffer.h>
+#include "cl/max_prefix_sum_cl.h"
 
 
 template<typename T>
@@ -71,7 +74,43 @@ int main(int argc, char **argv)
         }
 
         {
-            // TODO: implement on OpenCL
+            gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+            gpu::Context context;
+            context.init(device.device_id_opencl);
+            context.activate();
+
+            gpu::gpu_mem_32i gpu_in;
+            gpu_in.resizeN(n);
+            gpu_in.writeN(as.data(), n);
+
+            unsigned int gpu_sum = 0;
+            gpu::gpu_mem_32u gpu_out;
+            gpu_out.resizeN(1);
+
+            ocl::Kernel kernel(max_prefix_sum_kernel,  max_prefix_sum_kernel_length, "sumall");
+            kernel.compile(true);
+
+            const unsigned workGroupSize = 32;
+            const unsigned workSize = ((n/2) / workGroupSize + (n/2 % workGroupSize ? 1 : 0)) * workGroupSize;
+            ocl::LocalMem cache(sizeof(int) * workGroupSize);
+
+            gpu_out.writeN(&gpu_sum, 1);
+            kernel.exec(gpu::WorkSize(workGroupSize, workSize), gpu_in, n, cache, gpu_out);
+            gpu_out.readN(&gpu_sum, 1);
+            assert(reference_sum == gpu_sum); // correctness test
+
+            timer t;
+            for (int iter = 0; iter < benchmarkingIters; ++iter) {
+                for (int i = 0; i < n; i++) {
+                    kernel.exec(gpu::WorkSize(workGroupSize, workSize), gpu_in, n, cache, gpu_out);
+                }
+
+                EXPECT_THE_SAME(reference_max_sum, max_sum, "CPU result should be consistent!");
+                EXPECT_THE_SAME(reference_result, result, "CPU result should be consistent!");
+                t.nextLap();
+            }
+            std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
+            std::cout << "GPU: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
         }
     }
 }
