@@ -6,25 +6,33 @@
 
 #define WORK_GROUP_SIZE 32
 
-__kernel void max_prefix_sum(__global int* nums, __global int* mins, __global int* idxs, int iter,
-                             __local int* cnums, __local int* cmins, __local int* cidxs) {
-    int i = get_global_id(0);
-    int li = get_local_id(0);
-    int ls = get_local_size(0);
+__kernel void max_prefix_sum(int ww, int n, __global int* nums, __global int* maxs, __global int* idxs,
+                             __local int* cnums, __local int* cmaxs, __local int* cidxs) {
+    const int i = get_global_id(0);
+    const int li = get_local_id(0);
+    const int ls = get_local_size(0);
+    const int gi = get_group_id(0);
 
-    cnums[li] = nums[i];
-    cmins[li] = mins[i];
-    cidxs[li] = cidxs[i];
+    cnums[li] = 0;
+    cmaxs[li] = 0;
+    cidxs[li] = 0;
 
-#if (WARP_SIZE < WORK_GROUP_SIZE) {
+    if (i < n) {
+        cnums[li] = nums[i * ww];
+        cmaxs[li] = maxs[i * ww];
+        cidxs[li] = idxs[i * ww];
+    }
+
+#if (WARP_SIZE < WORK_GROUP_SIZE)
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 
-    for (int c = 1; c < ls; c *= 2) {
-        if ((li & c) == 0) {
-            cidxs[li] = (mins[li] < cnums[li] + mins[li + c] ? li * (1 << iter) : idxs[li + c]);
-            cidxs[li] = min(mins[li], cnums[li] + mins[li + c]);
-            cnums[li] += cnums[li + c];
+    for (int cd = 1; cd < ls; cd *= 2) {
+        int mask = (cd - 1) | 1;
+        if ((li & mask) == 0 && li + cd < ls && i + cd < n) {
+            cidxs[li] = cmaxs[li] > cnums[li] + cmaxs[li + cd] ? cidxs[li] : cidxs[li + cd];
+            cmaxs[li] = max(cmaxs[li], cnums[li] + cmaxs[li + cd]);
+            cnums[li] += cnums[li + cd];
         }
 
 #if (WARP_SIZE < WORK_GROUP_SIZE)
@@ -32,8 +40,9 @@ __kernel void max_prefix_sum(__global int* nums, __global int* mins, __global in
 #endif
     }
 
-    int gi = get_group_id(0);
-    nums[gi] = cnums[0];
-    mins[gi] = cmins[0];
-    idxs[gi] = cidxs[0];
+    if (li == 0) {
+        nums[i] = cnums[0];
+        maxs[i] = cmaxs[0];
+        idxs[i] = cidxs[0];
+    }
 }

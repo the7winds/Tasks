@@ -3,8 +3,8 @@
 #include <libutils/fast_random.h>
 #include <libgpu/context.h>
 #include <libgpu/shared_device_buffer.h>
+#include <cassert>
 #include "cl/max_prefix_sum_cl.h"
-
 
 template<typename T>
 void raiseFail(const T &a, const T &b, std::string message, std::string filename, int line)
@@ -23,15 +23,15 @@ int main(int argc, char **argv)
     int benchmarkingIters = 10;
     int max_n = (1 << 24);
 
-    for (int n = 2; n <= max_n; n *= 2) {
+    for (int n = 5; n <= max_n; n *= 2) {
         std::cout << "______________________________________________" << std::endl;
         int values_range = std::min(1023, std::numeric_limits<int>::max() / n);
         std::cout << "n=" << n << " values in range: [" << (-values_range) << "; " << values_range << "]" << std::endl;
 
-        std::vector<int> as(n, 0);
+        std::vector<int> numbers(n, 0);
         FastRandom r(n);
         for (int i = 0; i < n; ++i) {
-            as[i] = (unsigned int) r.next(-values_range, values_range);
+            numbers[i] = (unsigned int) r.next(-values_range, values_range);
         }
 
         int reference_max_sum;
@@ -41,7 +41,7 @@ int main(int argc, char **argv)
             int sum = 0;
             int result = 0;
             for (int i = 0; i < n; ++i) {
-                sum += as[i];
+                sum += numbers[i];
                 if (sum > max_sum) {
                     max_sum = sum;
                     result = i + 1;
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
                 int sum = 0;
                 int result = 0;
                 for (int i = 0; i < n; ++i) {
-                    sum += as[i];
+                    sum += numbers[i];
                     if (sum > max_sum) {
                         max_sum = sum;
                         result = i + 1;
@@ -79,34 +79,65 @@ int main(int argc, char **argv)
             context.init(device.device_id_opencl);
             context.activate();
 
-            gpu::gpu_mem_32i gpu_in;
-            gpu_in.resizeN(n);
-            gpu_in.writeN(as.data(), n);
+            gpu::gpu_mem_32i nums, maxs, idxs;
+            const unsigned workGroupSize = 32;
+            const unsigned N = (n / workGroupSize + (n % workGroupSize ? 1 : 0)) * workGroupSize;
 
-            unsigned int gpu_sum = 0;
-            gpu::gpu_mem_32u gpu_out;
-            gpu_out.resizeN(1);
+            std::vector<int> as(N);
+            std::vector<int> bs(N);
+            std::vector<int> cs(N);
 
-            ocl::Kernel kernel(max_prefix_sum_kernel,  max_prefix_sum_kernel_length, "sumall");
+            nums.resizeN(N);
+            maxs.resizeN(N);
+            idxs.resizeN(N);
+
+            ocl::Kernel kernel(max_prefix_sum_kernel,  max_prefix_sum_kernel_length, "max_prefix_sum");
             kernel.compile(true);
 
-            const unsigned workGroupSize = 32;
-            const unsigned workSize = ((n/2) / workGroupSize + (n/2 % workGroupSize ? 1 : 0)) * workGroupSize;
-            ocl::LocalMem cache(sizeof(int) * workGroupSize);
-
-            gpu_out.writeN(&gpu_sum, 1);
-            kernel.exec(gpu::WorkSize(workGroupSize, workSize), gpu_in, n, cache, gpu_out);
-            gpu_out.readN(&gpu_sum, 1);
-            assert(reference_sum == gpu_sum); // correctness test
+            ocl::LocalMem cnums(workGroupSize * sizeof(int));
+            ocl::LocalMem cmaxs(workGroupSize * sizeof(int));
+            ocl::LocalMem cidxs(workGroupSize * sizeof(int));
 
             timer t;
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
-                for (int i = 0; i < n; i++) {
-                    kernel.exec(gpu::WorkSize(workGroupSize, workSize), gpu_in, n, cache, gpu_out);
+                for (int i = 0; i < N; i++) {
+                    as[i] = numbers[i];
+                    bs[i] = numbers[i];
+                    cs[i] = i + 1;
                 }
 
-                EXPECT_THE_SAME(reference_max_sum, max_sum, "CPU result should be consistent!");
-                EXPECT_THE_SAME(reference_result, result, "CPU result should be consistent!");
+                unsigned nn = n;
+                unsigned ww = 1;
+                while (nn > 1) {
+                    nums.writeN(as.data(), nn);
+                    maxs.writeN(bs.data(), nn);
+                    idxs.writeN(cs.data(), nn);
+
+                    unsigned workSize = (nn / workGroupSize + (nn % workGroupSize ? 1 : 0)) * workGroupSize;
+                    kernel.exec(gpu::WorkSize(workGroupSize, workSize), ww, nn, nums, maxs, idxs, cnums, cmaxs, cidxs);
+                    nums.readN(as.data(), nn);
+                    maxs.readN(bs.data(), nn);
+                    idxs.readN(cs.data(), nn);
+
+                    unsigned i = 0;
+                    while (i * workGroupSize < nn) {
+                        as[i] = as[i * workGroupSize];
+                        bs[i] = bs[i * workGroupSize];
+                        cs[i] = cs[i * workGroupSize];
+                        i++;
+                    }
+                    nn = i;
+                }
+
+                int mx = 0;
+                int idx = 0;
+                maxs.readN(&mx, 1);
+                idxs.readN(&idx, 1);
+                mx = std::max(mx, 0);
+                idx = mx ? idx : 0;
+
+                EXPECT_THE_SAME(reference_max_sum,mx, "GPU result should be consistent!");
+                EXPECT_THE_SAME(reference_result, idx, "GPU result should be consistent!");
                 t.nextLap();
             }
             std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
