@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     }
     std::cout << "Data generated for M=" << M << ", K=" << K << "!" << std::endl;
 
-    /*
+
     gpu::gpu_mem_32f as_gpu, as_t_gpu;
     as_gpu.resizeN(M*K);
     as_t_gpu.resizeN(K*M);
@@ -42,14 +42,15 @@ int main(int argc, char **argv)
     ocl::Kernel matrix_transpose_kernel(matrix_transpose, matrix_transpose_length, "matrix_transpose");
     matrix_transpose_kernel.compile();
 
+    // TODO
+    unsigned int work_group_size = 32;
+    unsigned int global_work_size = M * K;
+    ocl::LocalMem loc(work_group_size * work_group_size * sizeof(float));
+
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
-            matrix_transpose_kernel.exec(gpu::WorkSize(work_group_size, global_work_size), as_gpu, as_t_gpu, M, K);
-
+            matrix_transpose_kernel.exec(gpu::WorkSize(work_group_size, work_group_size, M, K), as_gpu, as_t_gpu, M, K, loc);
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -69,7 +70,6 @@ int main(int argc, char **argv)
             }
         }
     }
-    */
 
     return 0;
 }
