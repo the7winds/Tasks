@@ -20,9 +20,9 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10; // TODO пока тестируетесь удобно выставить единицу
-    unsigned int M = 1024;
-    unsigned int K = 1024;
-    unsigned int N = 1024;
+    unsigned int M = 4; //256;
+    unsigned int K = 4; //256;
+    unsigned int N = 4; //256;
     const size_t gflops = ((size_t) M * K * N * 2) / (1000 * 1000 * 1000); // умножить на два, т.к. операция сложения и умножения
 
     std::vector<float> as(M*K, 0);
@@ -58,7 +58,6 @@ int main(int argc, char **argv)
 
     const std::vector<float> cs_cpu_reference = cs;
 
-    /*
     gpu::gpu_mem_32f as_gpu, bs_gpu, cs_gpu;
     as_gpu.resizeN(M*K);
     bs_gpu.resizeN(K*N);
@@ -70,14 +69,16 @@ int main(int argc, char **argv)
     ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication");
     matrix_multiplication_kernel.compile();
 
+    const unsigned int work_group_size = 2;
+    const unsigned int csz = work_group_size * work_group_size * sizeof(float);
+    ocl::LocalMem las(csz);
+    ocl::LocalMem lbs(csz);
+    ocl::LocalMem lcs(csz);
+
     {
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
-            // TODO
-            unsigned int work_group_size = 128;
-            unsigned int global_work_size = ...;
-            matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size, global_work_size), as_gpu, bs_gpu, cs_gpu, M, K, N);
-
+            matrix_multiplication_kernel.exec(gpu::WorkSize(work_group_size, work_group_size, M, N), as_gpu, bs_gpu, cs_gpu, M, K, N, las, lbs, lcs);
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -85,7 +86,6 @@ int main(int argc, char **argv)
     }
 
     cs_gpu.readN(cs.data(), M*N);
-    */
 
     // Проверяем корректность результатов
     double diff_sum = 0;
