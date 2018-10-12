@@ -11,7 +11,7 @@ void cache(__global float* A, int row, int col, __local float* lA)
     const int lrow = get_local_id(1);
     const int lcol = get_local_id(0);
 
-    printf("cache: %p %d %d %d %d\n", lA, lrow, lcol, (row * lwidth + lrow), col * lwidth + lcol);
+//    printf("cache: %p %d %d %d %d\n", lA, lrow, lcol, (row * lwidth + lrow), col * lwidth + lcol);
 
     lA[lrow * lwidth + lcol] = A[(row * lwidth + lrow) * width + (col * lwidth + lcol)];
 }
@@ -25,7 +25,7 @@ void mul(__local float* A, __local float* B, __local float* C)
 
     for (int i = 0; i < n; i++) {
         C[row * width + col] += A[row * width + i] * B[i * width + col];
-        printf("muladd: %p %p %d %d %d %d %d %d\n", A, B, row, col, row, i, i, col);
+//        printf("muladd: %p %p %d %d %d %d %d %d\n", A, B, row, col, row, i, i, col);
     }
 }
 

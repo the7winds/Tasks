@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     ocl::Kernel matrix_multiplication_kernel(matrix_multiplication, matrix_multiplication_length, "matrix_multiplication");
     matrix_multiplication_kernel.compile();
 
-    const unsigned int work_group_size = 2;
+    const unsigned int work_group_size = 16;
     const unsigned int csz = work_group_size * work_group_size * sizeof(float);
     ocl::LocalMem las(csz);
     ocl::LocalMem lbs(csz);
