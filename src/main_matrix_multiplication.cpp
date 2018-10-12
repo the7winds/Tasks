@@ -20,9 +20,9 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10; // TODO пока тестируетесь удобно выставить единицу
-    unsigned int M = 4; //256;
-    unsigned int K = 4; //256;
-    unsigned int N = 4; //256;
+    unsigned int M = 1024;
+    unsigned int K = 1024;
+    unsigned int N = 1024;
     const size_t gflops = ((size_t) M * K * N * 2) / (1000 * 1000 * 1000); // умножить на два, т.к. операция сложения и умножения
 
     std::vector<float> as(M*K, 0);
