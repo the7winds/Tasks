@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     matrix_transpose_kernel.compile();
 
     // TODO
-    unsigned int work_group_size = 32;
+    unsigned int work_group_size = 16;
     unsigned int global_work_size = M * K;
     ocl::LocalMem loc(work_group_size * work_group_size * sizeof(float));
 
