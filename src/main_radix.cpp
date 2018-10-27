@@ -52,13 +52,29 @@ int main(int argc, char **argv)
         std::cout << "CPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
         std::cout << "CPU: " << (n/1000/1000) / t.lapAvg() << " millions/s" << std::endl;
     }
-/*
+
+    unsigned int workGroupSize = 128;
+    unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+
     gpu::gpu_mem_32u as_gpu;
     as_gpu.resizeN(n);
 
+    gpu::gpu_mem_32u bs_gpu;
+    bs_gpu.resizeN(n);
+
+    gpu::gpu_mem_32u cs_gpu;
+    cs_gpu.resizeN(n / workGroupSize);
+
+    const size_t localSize = sizeof(int) * workGroupSize;
+    ocl::LocalMem x0s(localSize);
+    ocl::LocalMem x1s(localSize);
+    ocl::LocalMem xx(localSize);
+
     {
         ocl::Kernel radix(radix_kernel, radix_kernel_length, "radix");
+        ocl::Kernel relocate(radix_kernel, radix_kernel_length, "relocate");
         radix.compile();
+        relocate.compile();
 
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
@@ -66,10 +82,15 @@ int main(int argc, char **argv)
 
             t.restart(); // Запускаем секундомер после прогрузки данных чтобы замерять время работы кернела, а не трансфер данных
 
-            unsigned int workGroupSize = 128;
-            unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
-            radix.exec(gpu::WorkSize(workGroupSize, global_work_size),
-                       as_gpu, n);
+            for (int bit = 0; bit < 32; bit++) {
+                radix.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                        as_gpu, bs_gpu, cs_gpu, x0s, x1s, xx, bit);
+//                bs_gpu.readN(as.data(), n);
+                relocate.exec(gpu::WorkSize(workGroupSize, global_work_size),
+                        bs_gpu, cs_gpu, as_gpu, xx, bit);
+//                as_gpu.readN(as.data(), n);
+            }
+
             t.nextLap();
         }
         std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
@@ -82,6 +103,6 @@ int main(int argc, char **argv)
     for (int i = 0; i < n; ++i) {
         EXPECT_THE_SAME(as[i], cpu_sorted[i], "GPU results should be equal to CPU results!");
     }
-*/
+
     return 0;
 }
