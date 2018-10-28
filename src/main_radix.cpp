@@ -53,8 +53,10 @@ int main(int argc, char **argv)
         std::cout << "CPU: " << (n/1000/1000) / t.lapAvg() << " millions/s" << std::endl;
     }
 
-    unsigned int workGroupSize = 128;
+    unsigned int workGroupSize = 4;
     unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
+
+    std::vector<unsigned int> ps(n / workGroupSize);
 
     gpu::gpu_mem_32u as_gpu;
     as_gpu.resizeN(n);
@@ -73,6 +75,7 @@ int main(int argc, char **argv)
     {
         ocl::Kernel radix(radix_kernel, radix_kernel_length, "radix");
         ocl::Kernel relocate(radix_kernel, radix_kernel_length, "relocate");
+        ocl::Kernel psum(radix_kernel, radix_kernel_length, "psum");
         radix.compile();
         relocate.compile();
 
@@ -85,7 +88,9 @@ int main(int argc, char **argv)
             for (int bit = 0; bit < 32; bit++) {
                 radix.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         as_gpu, bs_gpu, cs_gpu, x0s, x1s, xx, bit);
-//                bs_gpu.readN(as.data(), n);
+
+                psum.exec(gpu::WorkSize(1, 1), cs_gpu, n / workGroupSize);
+
                 relocate.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         bs_gpu, cs_gpu, as_gpu, xx, bit);
 //                as_gpu.readN(as.data(), n);

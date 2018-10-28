@@ -73,24 +73,24 @@ __kernel void relocate(__global unsigned int* as,
     const int i = get_local_id(0);
     ls[i] = as[gi];
 
-    int zeros = 0;
-    for (int j = 0; j < get_num_groups(0); j++) {
-        zeros += bs[j];
-    }
+    int zeros = bs[get_num_groups(0) - 1];
 
-//    printf("%d\n", zeros);
-
-    int off0 = 0;
-    for (int j = 0; j < get_group_id(0); j++) {
-        off0 += bs[j];
-    }
+    int ii = get_group_id(0) - 1;
+    int off0 = (ii >= 0) * bs[ii];
     const int grp = get_group_id(0);
     const int off1 = get_local_size(0) * grp - off0;
 
     const int is1 = (ls[i] >> bit) & 1;
     const int is0 = 1 - is1;
 
-    const int idx = is0 * (off0 + i) + is1 * (zeros + off1 + i - bs[get_group_id(0)]);
+    const zz = bs[grp] - off0;
+    const int idx = is0 * off0 + is1 * (zeros + off1 - zz) + i;
     cs[idx] = ls[i];
-//    printf("%d %d\n", idx, i);
+//    printf("%d %d %d %d %d %d %d\n", idx, i,  is1, off1, off0, zeros, bs[grp]);
+}
+
+__kernel void psum(__global unsigned int* as, int n) {
+    for (int i = 1; i < n; i++) {
+        as[i] += as[i-1];
+    }
 }
