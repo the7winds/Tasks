@@ -33,7 +33,8 @@ int main(int argc, char **argv)
     context.activate();
 
     int benchmarkingIters = 10;
-    unsigned int n = 32 * 1024 * 1024;
+    const int N = 23;
+    unsigned int n = 1 << N;
     std::vector<float> as(n, 0);
     FastRandom r(n);
     for (unsigned int i = 0; i < n; ++i) {
@@ -69,7 +70,7 @@ int main(int argc, char **argv)
             unsigned int workGroupSize = 8;
             unsigned int global_work_size = (n + workGroupSize - 1) / workGroupSize * workGroupSize;
 
-            for (int i = 1; i < 26; i++) {
+            for (int i = 1; i <= N; i++) {
                 bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, (1 << i), 1);
                 for (int j = i - 1; j >= 1; j--) {
                     bitonic.exec(gpu::WorkSize(workGroupSize, global_work_size), as_gpu, n, (1 << j), 0);

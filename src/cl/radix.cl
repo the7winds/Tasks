@@ -83,7 +83,7 @@ __kernel void relocate(__global unsigned int* as,
     const int is1 = (ls[i] >> bit) & 1;
     const int is0 = 1 - is1;
 
-    const zz = bs[grp] - off0;
+    const int zz = bs[grp] - off0;
     const int idx = is0 * off0 + is1 * (zeros + off1 - zz) + i;
     cs[idx] = ls[i];
 //    printf("%d %d %d %d %d %d %d\n", idx, i,  is1, off1, off0, zeros, bs[grp]);
