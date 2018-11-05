@@ -90,7 +90,27 @@ __kernel void relocate(__global unsigned int* as,
 }
 
 __kernel void psum(__global unsigned int* as, int n) {
-    for (int i = 1; i < n; i++) {
-        as[i] += as[i-1];
+    const int grp = get_local_size(0);
+    const int i = get_global_id(0);
+
+    for (int bit = 0; (1 << bit) < grp; bit++) {
+        const int step = 1 << bit;
+        const int pos = (i / step) * step - 1;
+        if (pos >= 0 && i % (step * 2) >= step) {
+            as[i] += as[pos];
+        }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+__kernel void psum_merge(__global unsigned int* as, int n, int bit) {
+    const int i = get_global_id(0);
+    const int step = get_local_size(0) << bit;
+    const int pos = (i / step) * step - 1;
+    if (pos >= 0 && i % (step * 2) >= step) {
+        as[i] += as[pos];
     }
 }

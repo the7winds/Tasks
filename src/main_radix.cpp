@@ -76,8 +76,11 @@ int main(int argc, char **argv)
         ocl::Kernel radix(radix_kernel, radix_kernel_length, "radix");
         ocl::Kernel relocate(radix_kernel, radix_kernel_length, "relocate");
         ocl::Kernel psum(radix_kernel, radix_kernel_length, "psum");
+        ocl::Kernel psum_merge(radix_kernel, radix_kernel_length, "psum_merge");
         radix.compile();
         relocate.compile();
+        psum.compile();
+        psum_merge.compile();
 
         timer t;
         for (int iter = 0; iter < benchmarkingIters; ++iter) {
@@ -89,7 +92,12 @@ int main(int argc, char **argv)
                 radix.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         as_gpu, bs_gpu, cs_gpu, x0s, x1s, xx, bit);
 
-                psum.exec(gpu::WorkSize(1, 1), cs_gpu, n / workGroupSize);
+                psum.exec(gpu::WorkSize(workGroupSize, global_work_size), cs_gpu, n / workGroupSize);
+                cs_gpu.readN(as.data(), n / workGroupSize);
+                for (int tt = 0; (workGroupSize << tt) < global_work_size; tt++) {
+                    psum_merge.exec(gpu::WorkSize(workGroupSize, global_work_size), cs_gpu, n / workGroupSize, tt);
+//                    cs_gpu.readN(as.data(), n / workGroupSize);
+                }
 
                 relocate.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         bs_gpu, cs_gpu, as_gpu, xx, bit);
