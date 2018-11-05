@@ -111,6 +111,8 @@ __kernel void psum_merge(__global unsigned int* as, int n, int bit) {
     const int step = get_local_size(0) << bit;
     const int pos = (i / step) * step - 1;
     if (pos >= 0 && i % (step * 2) >= step) {
-        as[i] += as[pos];
+        int v = as[pos];
+        barrier(CLK_GLOBAL_MEM_FENCE);
+        as[i] += v;
     }
 }

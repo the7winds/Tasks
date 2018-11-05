@@ -92,16 +92,18 @@ int main(int argc, char **argv)
                 radix.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         as_gpu, bs_gpu, cs_gpu, x0s, x1s, xx, bit);
 
-                psum.exec(gpu::WorkSize(workGroupSize, global_work_size), cs_gpu, n / workGroupSize);
-                cs_gpu.readN(as.data(), n / workGroupSize);
-                for (int tt = 0; (workGroupSize << tt) < global_work_size; tt++) {
-                    psum_merge.exec(gpu::WorkSize(workGroupSize, global_work_size), cs_gpu, n / workGroupSize, tt);
-//                    cs_gpu.readN(as.data(), n / workGroupSize);
+                int szz = n / workGroupSize;
+//                cs_gpu.readN(as.data(), szz);
+                psum.exec(gpu::WorkSize(workGroupSize, szz), cs_gpu, szz);
+//                cs_gpu.readN(as.data(), szz);
+                for (int tt = 0; (workGroupSize << tt) < szz; tt++) {
+                    psum_merge.exec(gpu::WorkSize(workGroupSize, szz), cs_gpu, szz, tt);
+//                    cs_gpu.readN(as.data(), szz);
                 }
 
                 relocate.exec(gpu::WorkSize(workGroupSize, global_work_size),
                         bs_gpu, cs_gpu, as_gpu, xx, bit);
-//                as_gpu.readN(as.data(), n);
+                as_gpu.readN(as.data(), n);
             }
 
             t.nextLap();
